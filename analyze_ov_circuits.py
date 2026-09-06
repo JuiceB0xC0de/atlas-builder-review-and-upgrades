@@ -44,18 +44,15 @@ def _load_model(model_id: str, token: str | None, trust_remote_code: bool = Fals
 
 
 def _resolve_layers(model):
-    from collections import deque
-    import torch.nn as nn
-
-    queue = deque([model])
-    while queue:
-        module = queue.popleft()
-        layers = getattr(module, "layers", None)
-        if isinstance(layers, nn.ModuleList) and len(layers) > 0:
-            return list(layers)
-        for _, child in module.named_children():
-            queue.append(child)
-    raise RuntimeError("Cannot find decoder layers ModuleList")
+    # Shared resolver: prefers the language model's decoder stack over a vision
+    # tower's `.layers` on multimodal wrappers (gemma-4 ForConditionalGeneration).
+    import sys
+    from pathlib import Path as _P
+    root = str(_P(__file__).resolve().parent)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from qwip_atlas.layers import resolve_layers
+    return resolve_layers(model)
 
 
 def _gqa_mapping(n_heads: int, n_kv_heads: int) -> list[int]:
@@ -184,11 +181,12 @@ def run(model_id: str, output: Path, token: str | None = None, trust_remote_code
         n_kv_heads = getattr(attn, "num_key_value_heads", None)
         head_dim = getattr(attn, "head_dim", None)
 
-        if n_heads is None or head_dim is None:
-            cfg = model.config
-            n_heads = getattr(cfg, "num_attention_heads", n_heads)
-            head_dim = getattr(cfg, "head_dim", head_dim)
-            n_kv_heads = getattr(cfg, "num_key_value_heads", n_kv_heads)
+        if n_heads is None or head_dim is None or n_kv_heads is None:
+            cfg = getattr(model.config, "text_config", None) or model.config
+            # fill only what the module did not expose: gemma-4 head_dim differs per layer
+            n_heads = n_heads if n_heads is not None else getattr(cfg, "num_attention_heads", None)
+            head_dim = head_dim if head_dim is not None else getattr(cfg, "head_dim", None)
+            n_kv_heads = n_kv_heads if n_kv_heads is not None else getattr(cfg, "num_key_value_heads", None)
 
         if n_heads is None or head_dim is None:
             print(f"[ov] layer {layer_idx}: cannot infer head geometry, skipping")
@@ -227,8 +225,16 @@ def run(model_id: str, output: Path, token: str | None = None, trust_remote_code
         print(f"[ov] layer {layer_idx:>2}: {n_heads} heads analyzed")
 
     output.parent.mkdir(parents=True, exist_ok=True)
+    def _np_default(o):
+        # numpy scalars (float32 etc.) are not JSON serializable by default
+        if hasattr(o, "item"):
+            return o.item()
+        if hasattr(o, "tolist"):
+            return o.tolist()
+        raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
     with open(output, "w") as f:
-        json.dump(records, f, indent=2)
+        json.dump(records, f, indent=2, default=_np_default)
     print(f"[ov] wrote {len(records)} head records to {output}")
 
 

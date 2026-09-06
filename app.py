@@ -62,7 +62,32 @@ from transformers import AutoConfig
 
 
 DEFAULT_MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
+
+
+class _TokenHolder:
+    """Process-wide HF token for subprocess stages (set once in main())."""
+    _value: str | None = None
+
+    @classmethod
+    def set(cls, v: str | None) -> None:
+        cls._value = v
+
+    @classmethod
+    def get(cls) -> str | None:
+        return cls._value or os.environ.get("HF_TOKEN")
+
+
+_TOKEN = _TokenHolder
 DEFAULT_COMPONENTS = {"mlp", "gate", "up"}
+
+
+def _sub_env(token: str | None = None) -> dict:
+    """Environment for subprocess stages. The HF token goes in HF_TOKEN rather
+    than on the command line so it never shows up in `ps`, tracebacks or logs."""
+    env = dict(os.environ)
+    if token:
+        env["HF_TOKEN"] = token
+    return env
 
 
 def _analyze_one(npz: Path, analysis_dir: Path, pooling: str, skip_existing: bool,
@@ -89,7 +114,7 @@ def _analyze_one(npz: Path, analysis_dir: Path, pooling: str, skip_existing: boo
     if skip_existing:
         cmd.append("--skip-existing")
     print(f"[analyze] layer {layer} (pooling={pooling})")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
     gc.collect()
     return layer
 
@@ -442,9 +467,9 @@ def _atlas_init(atlas_dir: Path, model_id: str, census_sample: Path, token: str 
         str(census_sample),
     ]
     if token:
-        cmd += ["--hf-token", token]
+        pass  # token travels via HF_TOKEN in the subprocess env, not argv (see _sub_env)
     print(f"\n[atlas] init -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _atlas_merge_layers(atlas_dir: Path, census_dir: Path, analysis_dir: Path) -> None:
@@ -462,7 +487,7 @@ def _atlas_merge_layers(atlas_dir: Path, census_dir: Path, analysis_dir: Path) -
         "--no-census-copy",
     ]
     print(f"[atlas] merge-all-layers -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _atlas_merge_compliance(atlas_dir: Path, report: Path) -> None:
@@ -477,7 +502,7 @@ def _atlas_merge_compliance(atlas_dir: Path, report: Path) -> None:
         str(report),
     ]
     print(f"[atlas] merge-compliance-behaviour -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _atlas_merge_ov(atlas_dir: Path, report: Path) -> None:
@@ -492,7 +517,7 @@ def _atlas_merge_ov(atlas_dir: Path, report: Path) -> None:
         str(report),
     ]
     print(f"[atlas] merge-ov -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _atlas_merge_subzero(atlas_dir: Path, report: Path) -> None:
@@ -507,7 +532,7 @@ def _atlas_merge_subzero(atlas_dir: Path, report: Path) -> None:
         str(report),
     ]
     print(f"[atlas] merge-subzero -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _run_per_token_analysis(
@@ -571,11 +596,11 @@ def _run_per_token_analysis(
                 str(output),
             ]
             if token:
-                cmd += ["--hf-token", token]
+                pass  # token travels via HF_TOKEN in the subprocess env, not argv (see _sub_env)
             if trust_remote:
                 cmd.append("--trust-remote")
             print(f"[per-token] layer {layer} component {component} -> {output}")
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
             gc.collect()
 
 
@@ -597,11 +622,11 @@ def _run_logit_lens(
         str(output),
     ]
     if token:
-        cmd += ["--hf-token", token]
+        pass  # token travels via HF_TOKEN in the subprocess env, not argv (see _sub_env)
     if trust_remote:
         cmd.append("--trust-remote")
     print(f"[logit_lens] {model_id} -> {output}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _atlas_merge_logit_lens(atlas_dir: Path, report: Path) -> None:
@@ -616,7 +641,7 @@ def _atlas_merge_logit_lens(atlas_dir: Path, report: Path) -> None:
         str(report),
     ]
     print(f"[atlas] merge-logit-lens -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _run_sub_zero(
@@ -665,19 +690,19 @@ def _run_sub_zero(
         if wandb_tags:
             cmd += ["--wandb-tags", wandb_tags]
     if token:
-        cmd += ["--hf-token", token]
+        pass  # token travels via HF_TOKEN in the subprocess env, not argv (see _sub_env)
     if trust_remote:
         cmd.append("--trust-remote")
     if attn_implementation:
         cmd += ["--attn-implementation", attn_implementation]
     print(f"[sub_zero] running run_sub_zero.py (pooling={pooling}, all_layers={all_layers}) -> {report}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _atlas_index(atlas_dir: Path) -> None:
     cmd = [sys.executable, "-m", "qwip_atlas.build_atlas", "--atlas", str(atlas_dir), "index"]
     print(f"[atlas] index -> {atlas_dir}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def _pause(stage_name: str, pause: bool) -> None:
@@ -701,11 +726,11 @@ def _run_ov_circuits(model_id: str, output: Path, token: str | None, trust_remot
         str(output),
     ]
     if token:
-        cmd += ["--hf-token", token]
+        pass  # token travels via HF_TOKEN in the subprocess env, not argv (see _sub_env)
     if trust_remote:
         cmd.append("--trust-remote")
     print(f"[ov] running analyze_ov_circuits.py -> {output}")
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=_sub_env(_TOKEN.get()))
 
 
 def main() -> None:
@@ -813,6 +838,7 @@ def main() -> None:
 
     model_id = args.model
     token = args.hf_token
+    _TOKEN.set(token)
     components = _parse_components(args.components)
     # Pipeline group: ties every stage's W&B run together in the UI group pane.
     # When --wandb-run-name is set it IS the group (stage runs become

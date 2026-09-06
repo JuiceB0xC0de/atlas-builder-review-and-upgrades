@@ -19,42 +19,57 @@ def parse_layer_spec(spec: str) -> list[int]:
     return sorted(set(out))
 
 
-def layers_container(model: Any):
-    """Find the module that owns the decoder layers ModuleList.
+def _text_config(model: Any):
+    cfg = getattr(model, "config", None)
+    tc = getattr(cfg, "text_config", None)
+    return tc if tc is not None else cfg
 
-    Handles both standard `.layers` (Llama-style) and GPT-NeoX-style `.h`.
+
+def layers_container(model: Any):
+    """Find the module that owns the *language model's* decoder layers ModuleList.
+
+    Handles `.layers` (Llama-style), `.h` (GPT-NeoX-style) and multimodal
+    wrappers where the text stack sits under `language_model` (gemma-3/4
+    `ForConditionalGeneration`). The vision/audio towers also have a `.layers`
+    ModuleList, so a plain "deepest ModuleList" search can pick the vision
+    tower (16 layers of Gemma4VisionAttention) instead of the 42-layer text
+    decoder. We therefore prefer the container whose layer count equals
+    ``config.text_config.num_hidden_layers``.
     """
     import torch.nn as nn
 
-    # Direct known aliases first.
-    transformer = getattr(model, "transformer", None)
-    if transformer is not None:
-        h = getattr(transformer, "h", None)
-        if isinstance(h, nn.ModuleList) and len(h) > 0:
-            return transformer
-        layers = getattr(transformer, "layers", None)
-        if isinstance(layers, nn.ModuleList) and len(layers) > 0:
-            return transformer
+    text_cfg = _text_config(model)
+    n_text = getattr(text_cfg, "num_hidden_layers", None) or getattr(text_cfg, "n_layer", None)
 
-    model_module = getattr(model, "model", None)
-    if model_module is not None:
-        h = getattr(model_module, "h", None)
-        if isinstance(h, nn.ModuleList) and len(h) > 0:
-            return model_module
-        layers = getattr(model_module, "layers", None)
-        if isinstance(layers, nn.ModuleList) and len(layers) > 0:
-            return model_module
+    def _layers_of(module):
+        for attr_name in ("layers", "h"):
+            layers = getattr(module, attr_name, None)
+            if isinstance(layers, nn.ModuleList) and len(layers) > 0:
+                return layers
+        return None
 
-    # BFS fallback.
+    # Explicit well-known paths first (cheap and unambiguous).
+    for path in (("model", "language_model"), ("language_model",), ("model", "language_model", "model"),
+                 ("model",), ("transformer",), ("model", "model")):
+        module = model
+        for attr in path:
+            module = getattr(module, attr, None)
+            if module is None:
+                break
+        if module is not None and _layers_of(module) is not None:
+            if n_text is None or len(_layers_of(module)) == n_text:
+                return module
+
+    # BFS fallback: prefer a count match with the text config, else the deepest.
     queue = deque([model])
     best = None
     while queue:
         module = queue.popleft()
-        for attr_name in ("layers", "h"):
-            layers = getattr(module, attr_name, None)
-            if isinstance(layers, nn.ModuleList) and len(layers) > 0:
-                # Prefer the deepest container (closest to actual decoder layers).
-                best = module
+        layers = _layers_of(module)
+        if layers is not None:
+            if n_text is not None and len(layers) == n_text:
+                return module
+            best = module
         for _, child in module.named_children():
             queue.append(child)
     if best is not None:

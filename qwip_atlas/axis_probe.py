@@ -70,10 +70,17 @@ def _split(y: np.ndarray, holdout: float, seed: int) -> tuple[np.ndarray, np.nda
     return tr, te
 
 
+def _lr(C: float):
+    from sklearn.linear_model import LogisticRegression
+    # n_features >> n_samples for every component here (d up to 10240, n ~ 1000):
+    # liblinear's dual formulation is several times faster than lbfgs in that regime.
+    return LogisticRegression(C=C, solver="liblinear", dual=True, max_iter=2000)
+
+
 def fit_probe(X: np.ndarray, y: np.ndarray, *, holdout: float = DEFAULT_HOLDOUT, seed: int = 0,
               Cs: tuple[float, ...] = DEFAULT_CS) -> dict[str, Any]:
-    """Standardise on train, pick C by 3-fold CV on train, report train/test AUROC."""
-    from sklearn.linear_model import LogisticRegression
+    """Standardise on train, pick C by 3-fold CV on train (when several Cs are
+    given), report train/test AUROC."""
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold, cross_val_score
     from sklearn.pipeline import make_pipeline
@@ -91,11 +98,11 @@ def fit_probe(X: np.ndarray, y: np.ndarray, *, holdout: float = DEFAULT_HOLDOUT,
     if n_folds >= 2 and len(Cs) > 1:
         cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
         for C in Cs:
-            pipe = make_pipeline(StandardScaler(), LogisticRegression(C=C, max_iter=2000))
+            pipe = make_pipeline(StandardScaler(), _lr(C))
             score = cross_val_score(pipe, X[tr], y[tr], cv=cv, scoring="roc_auc").mean()
             if score > best_cv:
                 best_cv, best_C = score, C
-    pipe = make_pipeline(StandardScaler(), LogisticRegression(C=best_C, max_iter=2000))
+    pipe = make_pipeline(StandardScaler(), _lr(best_C))
     pipe.fit(X[tr], y[tr])
     p_tr = pipe.decision_function(X[tr])
     p_te = pipe.decision_function(X[te])
@@ -116,13 +123,14 @@ def axis_report(X: np.ndarray, y: np.ndarray, lengths: np.ndarray, *, seed: int 
     lengths = np.asarray(lengths, dtype=np.float32)
 
     main = fit_probe(X, y, holdout=holdout, seed=seed)
-    shuffled = fit_probe(X, rng.permutation(y), holdout=holdout, seed=seed)
+    C_main = (main.get("C") or DEFAULT_CS[1],)
+    shuffled = fit_probe(X, rng.permutation(y), holdout=holdout, seed=seed, Cs=C_main)
     length_only = fit_probe(lengths.reshape(-1, 1), y, holdout=holdout, seed=seed, Cs=(1.0,))
 
     idx = length_matched_indices(lengths, y, rng, n_bins=n_length_bins)
     if idx.size >= 16:
-        matched = fit_probe(X[idx], y[idx], holdout=holdout, seed=seed)
-        matched_shuf = fit_probe(X[idx], rng.permutation(y[idx]), holdout=holdout, seed=seed)
+        matched = fit_probe(X[idx], y[idx], holdout=holdout, seed=seed, Cs=C_main)
+        matched_shuf = fit_probe(X[idx], rng.permutation(y[idx]), holdout=holdout, seed=seed, Cs=C_main)
         matched_len_only = fit_probe(lengths[idx].reshape(-1, 1), y[idx], holdout=holdout, seed=seed, Cs=(1.0,))
     else:
         matched = matched_shuf = matched_len_only = {"auroc_test": None, "n_train": 0, "n_test": 0}
