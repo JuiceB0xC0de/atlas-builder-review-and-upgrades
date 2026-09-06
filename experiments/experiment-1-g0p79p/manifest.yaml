@@ -1,0 +1,9 @@
+experiment: 1
+eid: "exp_01m1v11wy3e6ase1tjang0p79p"
+title: "Atlas suite tranche 1: census fixes, null baselines, W&B wire, atlas diff"
+date: "2026-09-06"
+status: in-progress
+data: {}
+outputs: {}
+results: {}
+slurm_jobs: []

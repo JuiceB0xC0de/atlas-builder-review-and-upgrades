@@ -1,0 +1,19 @@
+numpy<2
+orjson>=3.10
+pandas>=2.2
+scikit-learn>=1.5
+scipy>=1.13
+matplotlib>=3.8
+seaborn>=0.13
+accelerate>=0.34
+torch>=2.4
+transformers>=4.54
+tqdm>=4.66
+huggingface_hub>=0.24
+hf_transfer>=0.1.9
+sentencepiece>=0.2.0
+protobuf>=3.20.0
+tokenizers>=0.15
+nvidia-ml-py>=12.560  # NVML: true device GPU memory for W&B ceiling tracking
+psutil>=5.9  # host RSS/CPU for atlas_wandb telemetry
+wandb>=0.18  # optional; atlas_wandb is a no-op if not installed
