@@ -19,5 +19,5 @@ ${PYTHON:-python} app.py \
   --positive authentic.jsonl --negative corporate.jsonl \
   --null-perms "${NULL_PERMS:-50}" ${EXTRA_ARGS:-} \
   --wandb-project "${WANDB_PROJECT:-default-exp-smoke}" --wandb-run-name "$SLUG-smoke" \
-  --no-auth-prompt 2>&1 | tee "$OUT/smoke.log"
+  --no-auth-prompt 2>&1 | tee -a "$OUT/smoke.log"
 echo "[smoke] done -> $OUT"

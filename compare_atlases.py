@@ -115,17 +115,21 @@ def fetch_from_wandb(project: str, group: str, entity: str | None, dest: Path) -
     got = []
     for art in run.logged_artifacts():
         if art.type == "manifest":
-            art.download(root=str(dest)); got.append(art.name)
+            art.download(root=str(dest))
+            got.append(art.name)
         elif art.type == "analysis":
-            art.download(root=str(dest / "analysis")); got.append(art.name)
+            art.download(root=str(dest / "analysis"))
+            got.append(art.name)
         elif art.type == "table":
-            art.download(root=str(dest / "analysis")); got.append(art.name)
+            art.download(root=str(dest / "analysis"))
+            got.append(art.name)
     # compliance scores live on the compliance run
     for r in runs:
         if (r.job_type or r.config.get("stage")) == "compliance":
             for art in r.logged_artifacts():
                 if art.type == "scores":
-                    art.download(root=str(dest)); got.append(art.name)
+                    art.download(root=str(dest))
+                    got.append(art.name)
     print(f"[wandb] {group}: run {run.name} ({run.url}) -> {dest}  artifacts: {got}")
     if not (dest / "run_manifest.json").exists():
         # fall back to the config copy
@@ -141,7 +145,18 @@ def fetch_from_wandb(project: str, group: str, entity: str | None, dest: Path) -
 def _f(x: Any, nd: int = 4) -> str:
     if x is None or (isinstance(x, float) and not np.isfinite(x)):
         return "n/a"
-    return f"{x:.{nd}f}" if isinstance(x, (int, float, np.floating)) else str(x)
+    if isinstance(x, (bool, np.bool_)):
+        return str(bool(x))
+    if isinstance(x, (int, np.integer)):
+        return str(int(x))
+    if isinstance(x, (float, np.floating)):
+        return f"{x:.{nd}f}"
+    return str(x)
+
+
+_INT_COLS = {"layer", "feature", "n_features", "n_survivors_a", "n_survivors_b", "survivors_a",
+             "survivors_b", "survivors_both", "survivors_gained", "survivors_lost",
+             "dominant_bucket_changed"}
 
 
 def distribution_compare(a: RunDir, b: RunDir) -> dict[str, Any]:
@@ -254,7 +269,11 @@ def feature_compare(a: RunDir, b: RunDir, top: int = 25) -> dict[str, Any]:
 def _md_table(rows: list[dict], cols: list[tuple[str, str]]) -> str:
     head = "| " + " | ".join(c for _, c in cols) + " |"
     sep = "|" + "|".join("---" for _ in cols) + "|"
-    body = ["| " + " | ".join(_f(r.get(k)) for k, _ in cols) + " |" for r in rows]
+    def cell(k, v):
+        if k in _INT_COLS and v is not None and not (isinstance(v, float) and not np.isfinite(v)):
+            return str(int(v))
+        return _f(v)
+    body = ["| " + " | ".join(cell(k, r.get(k)) for k, _ in cols) + " |" for r in rows]
     return "\n".join([head, sep, *body])
 
 

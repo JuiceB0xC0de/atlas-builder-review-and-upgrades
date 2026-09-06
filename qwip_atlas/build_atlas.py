@@ -58,6 +58,9 @@ def _model_meta_from_config(model_id: str, hf_token: str | None = None) -> dict:
               f"({e.__class__.__name__}); leaving model_meta as-is")
         return {}
 
+    # multimodal configs (gemma-4 ForConditionalGeneration) nest the text
+    # geometry under text_config; fall back to the top level otherwise
+    cfg = getattr(cfg, "text_config", None) or cfg
     n_heads  = getattr(cfg, "num_attention_heads", None)
     d_model  = getattr(cfg, "hidden_size", None)
     head_dim = getattr(cfg, "head_dim", None)

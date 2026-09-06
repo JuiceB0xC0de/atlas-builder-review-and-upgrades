@@ -10,6 +10,42 @@ pinned: false
 
 # Private HF Space Atlas Runner
 
+## Tranche 1 changes (2026-09)
+
+The package now lives in `qwip_atlas/` (with `qwip_atlas/extractors/` for the
+census and axis extractors) and tests in `tests/`; `python app.py` works from a
+clone with no other setup. See `RUNBOOK.md` for exact 80 GB-card commands.
+
+* **Census correctness**: bf16 (`--dtype bfloat16`, the default) no longer crashes
+  on `.numpy()`; `.npz` files are written via temp + rename and `--skip-census`
+  checks completeness (row count == corpus size) instead of existence;
+  `run_manifest.json` records model SHA, corpus hash, template SHA, dtype,
+  pooling, components, skipped components, code SHA and the null seed.
+* **Chat template on by default** (`--no-chat-template` to disable). The flag can
+  no longer silently no-op; long prompts are truncated on the *content* so the
+  generation tail survives, and the first batch asserts the rendered tail is the
+  template's generation prompt (what last-token pooling reads).
+* **gemma-4 adapter** (`qwip_atlas/adapters.py`): per-layer component map
+  (shared-KV layers have no k/v; full-attention layers use head_dim 512) with a
+  conformance check that fails before any forward pass if the map and the live
+  module tree disagree. Also fixes layer discovery on multimodal wrappers, which
+  used to pick the vision tower.
+* **`qwip_atlas/nulls.py`**: shuffled-label null for the per-feature F-statistic;
+  99.9th-percentile floor, BH q-values, `survivor` flag. New columns
+  `null_floor`, `q_value`, `survivor` in the SQLite `features` table (additive).
+  Signed components (up/attn/heads/q/k/v) now use `|z| > 1` as their "active"
+  rule for the taxonomy instead of `a > 0`.
+* **Axis probe** (`qwip_atlas/axis_probe.py`): the positive-vs-negative axis is a
+  held-out logistic probe with test AUROC, a shuffled-label control, an exact
+  word-count length-matched control and a length-only baseline; works for any
+  labeled pair. Legacy `fstat`/`delta` outputs unchanged.
+* **`compare_atlases.py`**: diff two runs (local dirs or two W&B groups) at the
+  feature level when the manifests agree, otherwise at the distribution level,
+  and report depth as a region rather than an argmax layer.
+* **W&B**: `job_type` per stage, manifest in every run config, per-layer
+  health/F/null/taxonomy/axis scalars, `top_features` and `axis/summary` tables,
+  `run_manifest` / `cross_layer` / `scores` artifacts.
+
 Headless atlas pipeline for local Hugging Face causal language models using GWIQ-atlas.
 
 This folder is meant to be copy-pasted or pushed into a **private Hugging Face Space** and run from the dev-mode terminal. The Docker image does not vendor this app; clone or upload this Space repo into `/workspace/atlasing` inside the container.
@@ -21,8 +57,13 @@ app.py                      # runner
 analyze_ov_circuits.py      # OV-circuit SVD analyzer
 finalize_census.py          # chunk finalizer
 requirements.txt            # direct dependencies, no remote repo references
-qwip_atlas/                            # vendored from GWIQ-atlas
-    extractors/                        # activation census extraction logic
+qwip_atlas/                            # the package (this repo)
+    extractors/                        # activation census + axis extraction
+    adapters.py                        # per-architecture component maps + conformance check
+    nulls.py                           # shuffled-label null, BH q-values, survivors
+    axis_probe.py                      # held-out axis probe + controls
+    manifest.py                        # run_manifest.json
+    cross_layer.py                     # cross_layer/*.json + scores.parquet
     tensor_utils.py                    # mask-aware mean/last token pooling helpers
     analyze_layers.py                  # per-layer feature taxonomy + separation
     analyze_tokens.py                  # per-token attribution profiler

@@ -260,7 +260,7 @@ def run_compliance_behaviour(cfg: ComplianceBehaviourRunConfig, hf_token: str | 
                 "seq_len_max": int(max(seq_lens)) if seq_lens else 0,
                 "n_tok": _n_tok,
                 **host_mem_snapshot(),
-            }, step=_batch_idx)
+            }, step=_batch_idx + 1)  # +1: the stage-boundary row already used step 0
 
         for layer, info in per_layer_info.items():
             for batch_idx, ((_, label), seq_len) in enumerate(zip(batch, seq_lens)):
@@ -393,7 +393,7 @@ def run_compliance_behaviour(cfg: ComplianceBehaviourRunConfig, hf_token: str | 
                 for k in ("auroc_test", "auroc_shuffled_test", "auroc_length_matched_test", "auroc_length_only_test"):
                     if a.get(k) is not None:
                         row[f"axis/{comp}/{k}"] = float(a[k])
-            _wlog(row, step=_batch_idx + 1 + i)
+            _wlog(row, step=_batch_idx + 2 + i)
         _wtable("axis/summary",
                 ["layer", "component", "auroc_test", "auroc_shuffled_test", "auroc_length_matched_test",
                  "auroc_length_only_test", "n_train", "n_test", "n_length_matched"], _axis_rows)
