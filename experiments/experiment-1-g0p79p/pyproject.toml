@@ -1,0 +1,30 @@
+# Silico: pre-initialized by the Lab — `uv add` your dependencies directly
+# (no `uv init`; it errors on this existing file). The pytorch-cpu index pin
+# keeps torch CPU-only on this GPU-less serving pod; GPU torch runs
+# cluster-side via sbatch. `explicit` scopes the pin to torch/vision/audio;
+# every other package resolves from PyPI as usual. pyyaml is seeded because
+# the scaffold itself writes manifest.yaml that experiment code is expected
+# to read (observed live: fresh envs failing `import yaml` on first use).
+[project]
+name = "experiment-1-g0p79p"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["pyyaml"]
+
+# silico-figures — the house Plotly style (apply_theme, add_reference_line,
+# save_figure_bundle, PLOTLY_CONFIG) — comes preinstalled: `uv run` here on
+# the pod can import it directly. Dev-group deps do NOT travel into sbatch
+# container jobs; `uv add` anything a job itself must import.
+[dependency-groups]
+dev = ["silico-figures"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+silico-figures = { path = "/opt/silico/plugins/figures", editable = true }

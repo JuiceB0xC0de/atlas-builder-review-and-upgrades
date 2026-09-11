@@ -1,0 +1,23 @@
+# Keeps heavy bytes out of git (and future worktree snapshots) — durable heavy
+# outputs belong in $SILICO_EXPERIMENT_ARTIFACTS_DIR, not the worktree.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.pkl
+*.bin
+*.onnx
+wandb/
+tensorboard/
+*.tfevents.*
+# SLURM job logs (SBATCH_OUTPUT defaults here) — read on disk, not a deliverable.
+slurm-logs/
+# Python build noise — never a deliverable, only clutters the changeset.
+__pycache__/
+*.pyc
+# Stranded _atomic_write temps (name.<pid>.<hex>.tmp) from a crashed write.
+*.*.*.tmp

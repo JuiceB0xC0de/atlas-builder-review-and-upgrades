@@ -1,0 +1,32 @@
+{
+  "job_id": "883368718971", "image": "job-core", "gpu": "1x H100 80GB",
+  "settings": {"layers": [5, 30], "rows": 512, "batch_size": 16, "max_length": 128, "dtype": "bfloat16",
+               "chat_template": true, "components": ["mlp","gate","up","attn","heads","q","k","v"],
+               "null_perms": 50, "null_seed": 0, "alpha": 0.05},
+  "models": {
+    "bella": {"id": "juiceb0xc0de/bella-bartender-gemma-e4b", "sha": "7067d7aa46554457ebaa61392ff7786cf0d25d83",
+              "rows_captured": {"5": 512, "30": 512}, "conformance": "2 layers / 16 component slots OK",
+              "wandb_group": "bella-smoke", "wandb_runs": {"census": "3o330ujp", "analysis": "tk2svpk3", "ov": "0w8kzjn0", "compliance": "0ty3w79f", "atlas": "4r7jnror"},
+              "wall_clock_min": 3.6},
+    "base": {"id": "google/gemma-4-E4B-it", "sha": "ee0ef6023621cff504d758262d4e04895a5af4a2",
+             "rows_captured": {"5": 512, "30": 512}, "conformance": "2 layers / 16 component slots OK",
+             "wandb_group": "base-smoke", "wandb_runs": {"census": "i06dgbvs", "analysis": "hb5w93k1", "ov": "yyyvhods", "compliance": "3rvkeypn", "atlas": "8pkny52a"},
+             "wall_clock_min": 4.0}
+  },
+  "wandb_project": "default-exp-exp_01m1v11wy3e6ase1tjang0p79p", "wandb_entity": "ricks-holmberg-juiceb0xc0de",
+  "template_check": {"tail_text": "<turn|>\\n<|turn>model\\n", "tail_ids": [106, 107, 105, 4368, 107], "last_token_id": 107},
+  "census_timing": {"forward_rows_per_s": 58, "peak_gpu_gb": 16.5, "finalize_s": 1.2},
+  "skipped_components": {"30": {"k": "kv_shared (reuses layer 22)", "v": "kv_shared (reuses layer 22)"}},
+  "null_floor_p999_range": [2.93, 3.16],
+  "survivor_fraction_bella": {"l5": {"mlp": 0.2266, "gate": 0.3187, "up": 0.9201, "attn": 0.9797, "heads": 0.8877, "q": 0.855, "k": 0.8516, "v": 0.9131},
+                              "l30": {"mlp": 0.7095, "gate": 0.8463, "up": 0.9008, "attn": 0.9645, "heads": 0.8281, "q": 0.7568}},
+  "survivor_fraction_base":  {"l5": {"mlp": 0.2282, "gate": 0.3164, "up": 0.9199, "attn": 0.9797, "heads": 0.887, "q": 0.8557, "k": 0.8525, "v": 0.915},
+                              "l30": {"mlp": 0.7327, "gate": 0.8706, "up": 0.9199, "attn": 0.9691, "heads": 0.8467, "q": 0.8198}},
+  "axis_auroc_bella_l5_mlp": {"test": 0.9991, "shuffled": 0.4624, "length_matched": 0.9986, "length_only": 0.7920, "n_length_matched": 358},
+  "compare": {"level": "feature", "aligned_features": 80896,
+              "fstat_spearman": {"l5": {"attn": 0.9993, "gate": 0.9974, "heads": 0.9988, "k": 0.9992, "mlp": 0.9975, "q": 0.9992, "up": 0.9992, "v": 0.9992},
+                                 "l30": {"attn": 0.9897, "gate": 0.9567, "heads": 0.9882, "mlp": 0.8894, "q": 0.8995, "up": 0.9591}},
+              "survivors_gained_lost_l30_mlp": {"gained": 773, "lost": 535, "both": 6730}},
+  "resume_check": "second run with --skip-census --skip-existing-analysis --skip-existing-atlas skipped census (all 2 .npz complete: 512 rows each), analysis, OV, compliance and atlas",
+  "unit_tests": {"pod": "36 passed, 1 skipped (orjson absent)", "job_core": "37 passed"}
+}
